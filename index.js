@@ -27,7 +27,7 @@ const generateState = _input => {
 class Parser {
   constructor() {}
 
-  parser(){}
+  parse(){}
 
   apply(state, fn) {
     let newState = this.parse(state);
@@ -38,9 +38,10 @@ class Parser {
   }
 }
 
-class StringParserTest extends Parser {
-  constructor(target) {
-    super()
+class StringParser extends Parser{
+  constructor(target, type) {
+    super();
+    this.type = type;
     this.target = target;
   }
 
@@ -61,8 +62,11 @@ class StringParserTest extends Parser {
         startsAt: endsAt,
         endsAt: endsAt + this.target.length,
         length: this.target.length,
-        result: this.target
-      };
+        result: {
+          res: this.target,
+          type: this.type
+        }
+      }
     } else {
       return {
         ...state,
@@ -73,61 +77,13 @@ class StringParserTest extends Parser {
   }
 }
 
-class StringParser {
-  constructor(target) {
-    this.target = target;
+class DigitParser extends Parser{
+  constructor() {
+    super();
   }
 
   parse(state) {
     let { input, endsAt } = state;
-
-    if(input.length === 0) {
-      return {
-        ...state,
-        isError: true,
-        error: 'StringParser expected input but got empyt string instead'
-      };
-    }
-
-    if(input.slice(endsAt).startsWith(this.target)) {
-      return {
-        ...state,
-        startsAt: endsAt,
-        endsAt: endsAt + this.target.length,
-        length: this.target.length,
-        result: this.target
-      };
-    } else {
-      return {
-        ...state,
-        error: 'StringParser could not match with input',
-        isError: true
-      };
-    }
-  }
-
-  apply(state, fn) {
-    let newState = this.parse(state);
-    return {
-      ...state,
-      result: fn(newState.result)
-    }
-  }
-}
-
-class DigitParser{
-  constructor() {}
-
-  parse(state) {
-    let { input, endsAt } = state;
-
-    if(input.length === 0) {
-      return {
-        ...state,
-        isError: true,
-        error: 'DigitParser expected input but got empyt string instead'
-      };
-    }
 
     if(digitRegex.test(input.slice(endsAt))) {
       let res = input.slice(endsAt).match(digitRegex)[0]
@@ -136,7 +92,10 @@ class DigitParser{
         startsAt: endsAt,
         endsAt: endsAt + res.length,
         length: res.length,
-        result: res
+        result: {
+          res: res,
+          value: Number(res)
+        }
       };
     } else {
       return {
@@ -146,18 +105,12 @@ class DigitParser{
       };
     }
   }
-
-  apply(state, fn) {
-    let newState = this.parse(state);
-    return {
-      ...state,
-      result: fn(newState.result)
-    }
-  }
 }
 
-class LetterParser {
-  constructor() {}
+class LetterParser extends Parser{
+  constructor() {
+    super();
+  }
 
   parse(state) {
     let { input, endsAt } = state;
@@ -185,42 +138,36 @@ class LetterParser {
         error: 'LetterParser could not match any input', isError: true };
     }
   }
-
-  apply(state, fn) {
-    let newState = this.parse(state);
-    return {
-      ...state,
-      result: fn(newState.result)
-    }
-  }
 }
 
-class AnyParser {
+
+class AnyParser extends Parser{
   constructor(parsers) {
+    super();
     this.parsers = parsers;
   }
 
   parse(state) {
 
-    let tempState = state; 
-    for (let i = 0; i < this.parsers.length; i++) {
-      tempState = this.parsers[i].parse(tempState);
-
-      if (!tempState.isError) {
-        return tempState;
+    for (let p of this.parsers) {
+      const nextState = p.parse(state);
+      if (!nextState.isError) {
+        return nextState;
       }
     }
 
     return {
-      ...tempState,
+      ...state,
       isError: true,
       error: 'any did not matched with any parsers'
     };
   }
 }
 
-class ManyParser {
+
+class ManyParser extends Parser{
   constructor(parser) {
+    super();
     this.parser = parser;
   }
 
@@ -228,25 +175,30 @@ class ManyParser {
     let results = [];
     let tempState = state;
 
-    while(!(tempState.endsAt === tempState.input.length)) {
+
+    let flag = true;
+
+    while(flag) {
 
       tempState = this.parser.parse(tempState);
       results.push(tempState.result);
 
+      if (tempState.endsAt === tempState.input.length) {
+        flag = false;
+      }
     }
 
     return {
       ...tempState,
-      result: results,
-      error: null,
-      isError: false
+      result: results
     };
   }
 }
 
 
-class SepBy {
+class SepBy extends Parser{
   constructor(seperatorParser) {
+    super();
     this.seperatorParser = seperatorParser;
   }
 
@@ -276,8 +228,9 @@ class SepBy {
   }
 }
 
-class SequenceParser {
+class SequenceParser extends Parser {
   constructor(parsers) {
+    super();
     this.parsers = parsers
   }
 
@@ -331,30 +284,57 @@ const sequence = (state, parsers) => {
   };
 }
 
+// TODO: fix manyparser generally it dones not work(infinite loop)
 // TODO: fix random error that is occurin because of the i + 1 number of iteration
-const many = (state, parser) => {
-  let results = [];
-  let tempState = state;
-
-
-  let flag = true;
-
-  while(flag) {
-
-
-    tempState = parser.parse(tempState);
-    results.push(tempState.result);
-
-    if (tempState.endsAt === tempState.input.length) {
-      flag = false;
-    }
-  }
-
-  return {
-    ...tempState,
-    result: results
-  };
-}
-
-
 // TODO: make all parsers extend the base class
+// TODO: fix any parser
+
+
+//
+// variable = <letter> | <variable><letter>
+// variable decleration  <variable><=><digit>
+// print statement <p(><variable><)>
+//
+
+const digits = new DigitParser();
+const variableParser = new StringParser('a', type='var');
+const printParser = new StringParser('p(', type='keywork');
+const rp =  new StringParser(')', type='rigth paran')
+const equalParser = new StringParser('=', type='equal');
+const equalequalParser = new StringParser('==', type='isequal');
+const procede = new StringParser(':', type='ifseperator');
+const qm =  new StringParser('?', type='if')
+
+
+
+const varOrPrint = new AnyParser([printParser, variableParser]);
+const varOrEqual = new AnyParser([variableParser, equalParser]);
+const RpOrDigit = new AnyParser([rp, digits]);
+
+
+
+// var -> = -> digit
+// var -> == / >= / <= -> digit / ? / x1 : x2
+
+
+const declerationOrPrint = new SequenceParser([
+  varOrPrint,
+  varOrEqual,
+  RpOrDigit,
+]);
+
+const comp = new SequenceParser([
+  variableParser,
+  equalequalParser,
+  digits,
+  qm,
+  declerationOrPrint,
+  procede,
+  declerationOrPrint
+])
+
+let s = generateState('a==123?a=3:p(a)')
+
+console.log(comp.parse(s))
+
+

@@ -2,7 +2,7 @@ digitRegex = /^[0-9]+/
 letterRegex = /^[A-Za-z]+/
 
 // base state
-state = {
+let state = {
   input: 'they',
   result: '',
   startsAt: 0,
@@ -10,6 +10,67 @@ state = {
   length: 0,
   error: null,
   isError: false
+}
+
+const generateState = _input => {
+  return { 
+  input: _input,
+  result: '',
+  startsAt: 0,
+  endsAt: 0,
+  length: 0,
+  error: null,
+  isError: false 
+  }
+}
+
+class Parser {
+  constructor() {}
+
+  parser(){}
+
+  apply(state, fn) {
+    let newState = this.parse(state);
+    return {
+      ...state,
+      result: fn(newState.result)
+    }
+  }
+}
+
+class StringParserTest extends Parser {
+  constructor(target) {
+    super()
+    this.target = target;
+  }
+
+  parse(state) {
+    let { input, endsAt } = state;
+
+    if(input.length === 0) {
+      return {
+        ...state,
+        isError: true,
+        error: 'StringParser expected input but got empyt string instead'
+      };
+    }
+
+    if(input.slice(endsAt).startsWith(this.target)) {
+      return {
+        ...state,
+        startsAt: endsAt,
+        endsAt: endsAt + this.target.length,
+        length: this.target.length,
+        result: this.target
+      };
+    } else {
+      return {
+        ...state,
+        error: 'StringParser could not match with input',
+        isError: true
+      };
+    }
+  }
 }
 
 class StringParser {
@@ -20,7 +81,7 @@ class StringParser {
   parse(state) {
     let { input, endsAt } = state;
 
-    if(input.lenght === 0) {
+    if(input.length === 0) {
       return {
         ...state,
         isError: true,
@@ -54,14 +115,13 @@ class StringParser {
   }
 }
 
-
 class DigitParser{
   constructor() {}
 
   parse(state) {
     let { input, endsAt } = state;
 
-    if(input.lenght === 0) {
+    if(input.length === 0) {
       return {
         ...state,
         isError: true,
@@ -102,7 +162,7 @@ class LetterParser {
   parse(state) {
     let { input, endsAt } = state;
 
-    if(input.lenght === 0) {
+    if(input.length === 0) {
       return {
         ...state,
         isError: true,
@@ -184,20 +244,57 @@ class ManyParser {
   }
 }
 
-const sequence = (state, parsers) => {
 
-  let results = [];
-  let tempState = state;
-
-  for (let i = 0; i < parsers.length; i++) {
-    tempState = parsers[i].parse(tempState);
-    results.push(tempState['result'])
+class SepBy {
+  constructor(seperatorParser) {
+    this.seperatorParser = seperatorParser;
   }
 
-  return {
-    ...tempState,
-    result: results
-  };
+  parse(state, targetParser) {
+    let newState;
+    let results = [];
+    let tempState = state;
+
+    while(true) {
+
+      tempState = targetParser.parse(tempState);
+      results.push(tempState.result);
+
+      newState = this.seperatorParser.parse(tempState)
+      if (newState.isError) {
+        break
+      }
+      tempState = newState;
+    }
+
+    return {
+      ...tempState,
+      result: results,
+      error: null,
+      isError: false
+    };
+  }
+}
+
+class SequenceParser {
+  constructor(parsers) {
+    this.parsers = parsers
+  }
+
+  parse(state) {
+    let results = [];
+    let tempState = state;
+
+    for (let i = 0; i < this.parsers.length; i++) {
+      tempState = this.parsers[i].parse(tempState);
+      results.push(tempState['result'])
+    }
+
+    return {
+      ...tempState,
+      result: results
+    };
+  }
 }
 
 const any = (state, parsers) => {
@@ -218,6 +315,21 @@ const any = (state, parsers) => {
   };
 }
 
+const sequence = (state, parsers) => {
+
+  let results = [];
+  let tempState = state;
+
+  for (let i = 0; i < parsers.length; i++) {
+    tempState = parsers[i].parse(tempState);
+    results.push(tempState['result'])
+  }
+
+  return {
+    ...tempState,
+    result: results
+  };
+}
 
 // TODO: fix random error that is occurin because of the i + 1 number of iteration
 const many = (state, parser) => {
@@ -244,17 +356,5 @@ const many = (state, parser) => {
   };
 }
 
-const generateState = _input => {
-  return { 
-  input: _input,
-  result: '',
-  startsAt: 0,
-  endsAt: 0,
-  length: 0,
-  error: null,
-  isError: false 
-  }
-}
 
-// TODO: implement the many1 parser
-// TODO: implement the sequece parser class
+// TODO: make all parsers extend the base class

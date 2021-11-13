@@ -2,7 +2,7 @@ digitRegex = /^[0-9]+/
 letterRegex = /^[A-Za-z]+/
 
 // base state
-let state = {
+const state = {
   input: 'they',
   result: '',
   startsAt: 0,
@@ -94,6 +94,7 @@ class DigitParser extends Parser{
         length: res.length,
         result: {
           res: res,
+          type: 'digit',
           value: Number(res)
         }
       };
@@ -219,8 +220,7 @@ class SepBy extends Parser{
       tempState = newState;
     }
 
-    return {
-      ...tempState,
+    return { ...tempState,
       result: results,
       error: null,
       isError: false
@@ -298,7 +298,7 @@ const sequence = (state, parsers) => {
 
 const digits = new DigitParser();
 const variableParser = new StringParser('a', type='var');
-const printParser = new StringParser('p(', type='keywork');
+const printParser = new StringParser('p(', type='print');
 const rp =  new StringParser(')', type='rigth paran')
 const equalParser = new StringParser('=', type='equal');
 const equalequalParser = new StringParser('==', type='isequal');
@@ -323,6 +323,11 @@ const declerationOrPrint = new SequenceParser([
   RpOrDigit,
 ]);
 
+const declerationandPrint = new SequenceParser([
+  declerationOrPrint,
+  declerationOrPrint
+])
+
 const comp = new SequenceParser([
   variableParser,
   equalequalParser,
@@ -333,8 +338,57 @@ const comp = new SequenceParser([
   declerationOrPrint
 ])
 
-let s = generateState('a==123?a=3:p(a)')
+const full = new SequenceParser([
+  declerationOrPrint,
+  comp,
+  declerationOrPrint
+])
 
-console.log(comp.parse(s))
+let ifstate = generateState('a==123?a=3:p(a)')
+let printState = generateState('p(a)')
+let vardecleration = generateState('a=4')
+let combine = generateState('a=4a==5?a=3:p(a)p(a)')
+let assingprint = generateState('a=4p(a)')
+
+// console.log(declerationOrPrint.parse(printState).result)
+let val = full.parse(combine).result
 
 
+let vars = {};
+const evalr = (v) => {
+
+  let arr = v.reduce((acc, curVal) => {
+    return acc.concat(curVal)
+  }, []);
+
+  arg1 = arr[0];
+  arg2 = arr[1];
+  arg3 = arr[2];
+
+  if (arg1.type == 'var' &  arg2.type == 'equal' & arg3.type == 'digit') {
+    vars[arg1.res] = arg3.value
+    console.log(vars)
+    if (arr.length >= 3) {
+      evalr(arr.slice(3))
+    }
+  }
+
+  if (arg1.type == 'print' &  arg2.type == 'var' & arg3.type == 'rigth paran') {
+
+    console.log(vars[arg2.res]);
+
+    if (arr.length >= 3) {
+      evalr(arr.slice(3))
+    }
+  }
+
+  if (arg1.type == 'var' &  arg2.type == 'isequal' & arg3.type == 'digit' & arr[3].type == 'if') {
+    if (vars[arg1.res] == arg3.value) {
+      evalr(arr.slice(4, 7).concat(arr.slice(11, )))
+    } else {
+      evalr(arr.slice(8))
+    }
+  }
+}
+
+evalr(val)

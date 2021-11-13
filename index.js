@@ -109,8 +109,9 @@ class DigitParser extends Parser{
 }
 
 class LetterParser extends Parser{
-  constructor() {
+  constructor(type) {
     super();
+    this.type = type;
   }
 
   parse(state) {
@@ -131,7 +132,10 @@ class LetterParser extends Parser{
         startsAt: endsAt,
         endsAt: endsAt + res.length,
         length: res.length,
-        result: res
+        result: {
+          res: res,
+          type: this.type
+        }
       };
     } else {
       return {
@@ -297,13 +301,16 @@ const sequence = (state, parsers) => {
 //
 
 const digits = new DigitParser();
-const variableParser = new StringParser('a', type='var');
+// const variableParser = new StringParser('a', type='var');
+const variableParser = new LetterParser(type='var')
 const printParser = new StringParser('p(', type='print');
 const rp =  new StringParser(')', type='rigth paran')
 const equalParser = new StringParser('=', type='equal');
 const equalequalParser = new StringParser('==', type='isequal');
 const procede = new StringParser(':', type='ifseperator');
 const qm =  new StringParser('?', type='if')
+const arrowparser = new StringParser('<-', type='for')
+const toparser = new StringParser('to', type='to')
 
 
 
@@ -323,10 +330,8 @@ const declerationOrPrint = new SequenceParser([
   RpOrDigit,
 ]);
 
-const declerationandPrint = new SequenceParser([
-  declerationOrPrint,
-  declerationOrPrint
-])
+
+const a = new ManyParser(declerationOrPrint)
 
 const comp = new SequenceParser([
   variableParser,
@@ -338,57 +343,127 @@ const comp = new SequenceParser([
   declerationOrPrint
 ])
 
+
 const full = new SequenceParser([
   declerationOrPrint,
   comp,
   declerationOrPrint
 ])
 
+const loop = new SequenceParser([
+  variableParser,
+  arrowparser,
+  digits,
+  toparser,
+  digits,
+  procede,
+  declerationOrPrint
+])
+
+
+const an = new AnyParser([
+  declerationOrPrint,
+  comp,
+  loop
+])
+const p = new ManyParser(an)
+
+let sa = '  a <- 1 to10:p(a)p(a)a=123a==123?a=3:p(a)p(a)'
+sa = sa.replace(/\s/g, "");
+let teststate = generateState(sa);
+
+
 let ifstate = generateState('a==123?a=3:p(a)')
 let printState = generateState('p(a)')
 let vardecleration = generateState('a=4')
-let combine = generateState('a=4a==5?a=3:p(a)p(a)')
-let assingprint = generateState('a=4p(a)')
+let combine = generateState('b=5a=4b==5?b=3:p(a)p(a)')
+let assingprint = generateState('a=4p(a)b=5p(b)')
 
-// console.log(declerationOrPrint.parse(printState).result)
-let val = full.parse(combine).result
+// a = 4 
+// a == 5 ? a = 3 : p(a)
+// i <- 1 to 10 : p(a)
+// p(a)
 
+let val = p.parse(teststate).result
 
-let vars = {};
 const evalr = (v) => {
+
 
   let arr = v.reduce((acc, curVal) => {
     return acc.concat(curVal)
   }, []);
 
-  arg1 = arr[0];
-  arg2 = arr[1];
-  arg3 = arr[2];
-
-  if (arg1.type == 'var' &  arg2.type == 'equal' & arg3.type == 'digit') {
-    vars[arg1.res] = arg3.value
-    console.log(vars)
-    if (arr.length >= 3) {
+  if (arr[0].type == 'var' &  arr[1].type == 'equal' & arr[2].type == 'digit') {
+    vars[arr[0].res] = arr[2].value;
+    if (arr.slice(3).length >= 3) {
       evalr(arr.slice(3))
+    }
+    return;
+  }
+
+  if (arr[0].type == 'print' &  arr[1].type == 'var' & arr[2].type == 'rigth paran') {
+
+    console.log(vars[arr[1].res]);
+
+    if (arr.slice(3).length >= 3) {
+      evalr(arr.slice(3))
+    }
+    return;
+  }
+
+  if (arr[0].type == 'var' & arr[1].type == 'for' & arr[2].type == 'digit' & arr[3].type == 'to') {
+
+    for (let i = arr[2].value; i < arr[4].value; i++) {
+      vars[arr[0].res] = i;
+      forarr = arr.slice(6, 9);
+      evalr(forarr);
+    }
+
+    if (arr.length >= 3) {
+      evalr(arr.slice(7));
     }
   }
 
-  if (arg1.type == 'print' &  arg2.type == 'var' & arg3.type == 'rigth paran') {
+  if (arr[0].type == 'var' &  arr[1].type == 'isequal' & arr[2].type == 'digit' & arr[3].type == 'if') {
+    let sepAt;
 
-    console.log(vars[arg2.res]);
-
-    if (arr.length >= 3) {
-      evalr(arr.slice(3))
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i].type === 'ifseperator') {
+        sepAt = i;
+      }
     }
-  }
 
-  if (arg1.type == 'var' &  arg2.type == 'isequal' & arg3.type == 'digit' & arr[3].type == 'if') {
-    if (vars[arg1.res] == arg3.value) {
-      evalr(arr.slice(4, 7).concat(arr.slice(11, )))
+    if (vars[arr[0].res] == arr[2].value) {
+      evalr(arr.slice(4, sepAt).concat(arr.slice(11, )));
     } else {
-      evalr(arr.slice(8))
+      evalr(arr.slice(setAt + 1));
     }
   }
 }
 
-evalr(val)
+let vars = {};
+
+
+
+const fs = require("fs");
+// read the file
+let  content = fs.readFileSync("demo.cyc");
+// print it
+content = content.toString();
+
+
+content = content.replace(/\s/g, "");
+let demostate = generateState(content);
+
+// a = 4 
+// a == 5 ? a = 3 : p(a)
+// i <- 1 to 10 : p(a)
+// p(a)
+
+let val1 = p.parse(demostate).result
+
+evalr(val1)
+
+// TODO: exit evalr function all the input is evaluated
+// TODO: endif expressin
+// TODO: recurcive parsers

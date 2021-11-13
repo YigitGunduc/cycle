@@ -1,9 +1,13 @@
+const fs = require("fs");
+
+let vars = {};
+
 digitRegex = /^[0-9]+/
 letterRegex = /^[A-Za-z]+/
 
 // base state
-const state = {
-  input: 'they',
+const base_state = {
+  input: '',
   result: '',
   startsAt: 0,
   endsAt: 0,
@@ -288,106 +292,62 @@ const sequence = (state, parsers) => {
   };
 }
 
-// TODO: fix manyparser generally it dones not work(infinite loop)
+// TODO: exit evalr function all the input is evaluated
 // TODO: fix random error that is occurin because of the i + 1 number of iteration
-// TODO: make all parsers extend the base class
 // TODO: fix any parser
 
-
-//
-// variable = <letter> | <variable><letter>
-// variable decleration  <variable><=><digit>
-// print statement <p(><variable><)>
-//
-
 const digits = new DigitParser();
-// const variableParser = new StringParser('a', type='var');
-const variableParser = new LetterParser(type='var')
-const printParser = new StringParser('p(', type='print');
-const rp =  new StringParser(')', type='rigth paran')
-const equalParser = new StringParser('=', type='equal');
-const equalequalParser = new StringParser('==', type='isequal');
-const procede = new StringParser(':', type='ifseperator');
 const qm =  new StringParser('?', type='if')
-const arrowparser = new StringParser('<-', type='for')
-const toparser = new StringParser('to', type='to')
+const toParser = new StringParser('to', type='to')
+const variableParser = new LetterParser(type='var')
+const rp =  new StringParser(')', type='rigth paran')
+const arrowParser = new StringParser('<-', type='for')
+const equalParser = new StringParser('=', type='equal');
+const printParser = new StringParser('p(', type='print');
+const isEqualParser = new StringParser('==', type='isequal');
+const seperator = new StringParser(':', type='ifseperator');
 
-
-
-const varOrPrint = new AnyParser([printParser, variableParser]);
-const varOrEqual = new AnyParser([variableParser, equalParser]);
-const RpOrDigit = new AnyParser([rp, digits]);
-
-
-
-// var -> = -> digit
-// var -> == / >= / <= -> digit / ? / x1 : x2
+const variableOrPrint = new AnyParser([printParser, variableParser]);
+const variableOrEqual = new AnyParser([variableParser, equalParser]);
+const RigthParanOrDigit = new AnyParser([rp, digits]);
 
 
 const declerationOrPrint = new SequenceParser([
-  varOrPrint,
-  varOrEqual,
-  RpOrDigit,
+  variableOrPrint,
+  variableOrEqual,
+  RigthParanOrDigit
 ]);
 
-
-const a = new ManyParser(declerationOrPrint)
-
-const comp = new SequenceParser([
+const ifParser = new SequenceParser([
   variableParser,
-  equalequalParser,
+  isEqualParser,
   digits,
   qm,
   declerationOrPrint,
-  procede,
+  seperator,
   declerationOrPrint
-])
+]);
 
 
-const full = new SequenceParser([
-  declerationOrPrint,
-  comp,
-  declerationOrPrint
-])
-
-const loop = new SequenceParser([
+const loopParser = new SequenceParser([
   variableParser,
-  arrowparser,
+  arrowParser,
   digits,
-  toparser,
+  toParser,
   digits,
-  procede,
+  seperator,
   declerationOrPrint
-])
+]);
 
-
-const an = new AnyParser([
+const parser = new AnyParser([
   declerationOrPrint,
-  comp,
-  loop
-])
-const p = new ManyParser(an)
+  ifParser,
+  loopParser 
+]);
 
-let sa = '  a <- 1 to10:p(a)p(a)a=123a==123?a=3:p(a)p(a)'
-sa = sa.replace(/\s/g, "");
-let teststate = generateState(sa);
+const p = new ManyParser(parser);
 
-
-let ifstate = generateState('a==123?a=3:p(a)')
-let printState = generateState('p(a)')
-let vardecleration = generateState('a=4')
-let combine = generateState('b=5a=4b==5?b=3:p(a)p(a)')
-let assingprint = generateState('a=4p(a)b=5p(b)')
-
-// a = 4 
-// a == 5 ? a = 3 : p(a)
-// i <- 1 to 10 : p(a)
-// p(a)
-
-let val = p.parse(teststate).result
-
-const evalr = (v) => {
-
+const eval = (v) => {
 
   let arr = v.reduce((acc, curVal) => {
     return acc.concat(curVal)
@@ -396,7 +356,7 @@ const evalr = (v) => {
   if (arr[0].type == 'var' &  arr[1].type == 'equal' & arr[2].type == 'digit') {
     vars[arr[0].res] = arr[2].value;
     if (arr.slice(3).length >= 3) {
-      evalr(arr.slice(3))
+      eval(arr.slice(3))
     }
     return;
   }
@@ -406,7 +366,7 @@ const evalr = (v) => {
     console.log(vars[arr[1].res]);
 
     if (arr.slice(3).length >= 3) {
-      evalr(arr.slice(3))
+      eval(arr.slice(3))
     }
     return;
   }
@@ -416,11 +376,11 @@ const evalr = (v) => {
     for (let i = arr[2].value; i < arr[4].value; i++) {
       vars[arr[0].res] = i;
       forarr = arr.slice(6, 9);
-      evalr(forarr);
+      eval(forarr);
     }
 
     if (arr.length >= 3) {
-      evalr(arr.slice(7));
+      eval(arr.slice(7));
     }
   }
 
@@ -434,36 +394,31 @@ const evalr = (v) => {
     }
 
     if (vars[arr[0].res] == arr[2].value) {
-      evalr(arr.slice(4, sepAt).concat(arr.slice(11, )));
+      eval(arr.slice(4, sepAt).concat(arr.slice(11, )));
     } else {
-      evalr(arr.slice(setAt + 1));
+      eval(arr.slice(setAt + 1));
     }
   }
 }
 
-let vars = {};
+const get_filename = () => {
 
+  var filename = process.argv.slice(2, 3);
+  filename = filename[0];
 
+  let  content = fs.readFileSync(filename);
+  content = content.toString();
 
-const fs = require("fs");
-// read the file
-let  content = fs.readFileSync("demo.cyc");
-// print it
-content = content.toString();
+  content = content.replace(/\s/g, "");
+  
+  return content;
+}
 
+const run = () => {
+  let content = get_filename()
+  let state = generateState(content);
+  let ast = p.parse(state).result;
+  eval(ast);
+}
 
-content = content.replace(/\s/g, "");
-let demostate = generateState(content);
-
-// a = 4 
-// a == 5 ? a = 3 : p(a)
-// i <- 1 to 10 : p(a)
-// p(a)
-
-let val1 = p.parse(demostate).result
-
-evalr(val1)
-
-// TODO: exit evalr function all the input is evaluated
-// TODO: endif expressin
-// TODO: recurcive parsers
+run();
